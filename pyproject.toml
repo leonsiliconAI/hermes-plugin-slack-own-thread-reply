@@ -1,0 +1,5 @@
+[project]
+name = "hermes-plugin-slack-own-thread-reply"
+version = "1.0.1"
+requires-python = ">=3.11"
+dependencies = ["pythonmonkey==1.5.1"]

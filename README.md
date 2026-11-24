@@ -27,7 +27,7 @@ This doesn't let Hermes post anywhere it couldn't before. A gateway turn's `send
 ## Install
 
 ```sh
-hermes plugins install leonsiliconAI/hermes-plugin-slack-own-thread-reply --enable
+hermes plugins install leonsiliconAI/hermes-plugin-slack-own-thread-reply --enable --yes-deps
 ```
 
 See [migration steps](https://github.com/leonsilicon/leonsilicon.ai/blob/main/DEVELOPMENT.md#hermes-plugin-mirrors) for an existing install. Restart the gateway. The gateway log then shows `slack-own-thread-reply: slack_reply_own_thread registered`. Plugin toolsets are on for every platform unless `known_plugin_toolsets` names them, so cron jobs with no `enabled_toolsets` of their own get the tool too.

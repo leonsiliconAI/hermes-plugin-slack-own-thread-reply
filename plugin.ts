@@ -7,7 +7,13 @@ export const pluginName = "slack-own-thread-reply";
 export const pluginDirectory = fileURLToPath(new URL(".", import.meta.url));
 
 /** Files that make up the deployed plugin. */
-export const pluginFiles = ["plugin.yaml", "__init__.py"] as const;
+export const pluginFiles = [
+  "plugin.yaml",
+  "__init__.py",
+  "pyproject.toml",
+  "_pythonmonkey.py",
+  "policy.cjs",
+] as const;
 
 /** Tool the plugin registers, and the toolset it belongs to. */
 export const toolName = "slack_reply_own_thread";

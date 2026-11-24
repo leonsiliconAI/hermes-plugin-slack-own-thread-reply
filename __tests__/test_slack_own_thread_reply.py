@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import sys
 import json
 import pathlib
 import types
@@ -16,6 +17,7 @@ from gateway.relay import egress
 _spec = importlib.util.spec_from_file_location(
     "slack_own_thread_reply", pathlib.Path(__file__).resolve().parents[1] / "__init__.py")
 plugin = importlib.util.module_from_spec(_spec)
+sys.modules[_spec.name] = plugin
 _spec.loader.exec_module(plugin)
 
 CHANNEL = "C0THREADS01"

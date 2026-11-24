@@ -14,15 +14,17 @@ a thread root posted by Hermes's own bot user, read back from Slack before every
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
-import re
 import sys
 import threading
 import time
 import urllib.parse
 import urllib.request
+
+from ._pythonmonkey import call
 
 LOG = logging.getLogger(__name__)
 
@@ -33,8 +35,6 @@ CHANNELS_ENV = "SLACK_OWN_THREAD_CHANNELS"
 DEFAULT_MAX_PER_HOUR = 4
 MAX_TEXT = 3500
 
-_CHANNEL = re.compile(r"^[CG][A-Z0-9]{6,}$")
-_TS = re.compile(r"^\d{9,11}\.\d{6}$")
 _LOCK = threading.Lock()
 _SENT: dict[tuple[str, str], list[float]] = {}
 _IDENTITY: dict[str, tuple[str, str]] = {}
@@ -154,10 +154,6 @@ def _release(key: tuple[str, str], stamp: float) -> None:
             recent.remove(stamp)
 
 
-def _error(message: str) -> str:
-    return json.dumps({"success": False, "error": message})
-
-
 def _send_module():
     try:
         from gateway.outbound import send
@@ -168,54 +164,48 @@ def _send_module():
     return send
 
 
-def handle(args: dict, **_kw) -> str:
-    channel = str(args.get("channel") or "").strip()
-    thread_ts = str(args.get("thread_ts") or "").strip()
-    text = str(args.get("text") or "").strip()
-    if not _CHANNEL.match(channel):
-        return _error("channel must be a Slack channel ID such as C0THREADS01")
-    if not _TS.match(thread_ts):
-        return _error("thread_ts must be a Slack message ts such as 1794360293.700699")
-    if not text:
-        return _error("text is required")
-    if len(text) > MAX_TEXT:
-        return _error(f"text is {len(text)} characters; keep a thread reply under {MAX_TEXT}")
-    allowed = _allowed_channels()
-    if allowed and channel not in allowed:
-        return _error(f"channel {channel} is not in {CHANNELS_ENV}")
-    if not available():
-        return _error("no live Slack adapter in this process; this tool only runs inside the gateway")
+async def _read_thread(channel, thread_ts):
+    return await asyncio.to_thread(_read_thread_sync, channel, thread_ts)
 
+
+def _read_thread_sync(channel, thread_ts):
     try:
         token = _bot_token()
         user_id, bot_id = _identity(token)
         root = _thread_root(channel, thread_ts, token)
     except Exception as exc:
-        return _error(f"could not read the thread's top message: {exc}")
-    if str(root.get("ts") or "") != thread_ts:
-        return _error(f"{thread_ts} is not the top message of a thread in {channel}; pass the thread's own ts")
-    author_is_hermes = root.get("user") == user_id or (bot_id and root.get("bot_id") == bot_id)
-    if not author_is_hermes:
-        return _error(
-            f"the top message of {channel}:{thread_ts} was not posted by Hermes's bot ({user_id}); "
-            "this tool only replies in threads Hermes started")
+        return {"error": f"could not read the thread's top message: {exc}"}
+    return {"userId": user_id, "botId": bot_id, "root": root}
 
-    key, stamp = (channel, thread_ts), time.time()
-    if not _reserve(key, stamp):
-        return _error(
-            f"already sent {_max_per_hour()} replies to this thread in the last hour; "
-            "wait for an answer instead of pinging again")
 
-    raw = _send_module().send_message_tool({"action": "send", "target": f"slack:{channel}:{thread_ts}", "message": text})
+async def _send_thread(target, text):
+    return await asyncio.to_thread(_send_thread_sync, target, text)
+
+
+def _send_thread_sync(target, text):
+    raw = _send_module().send_message_tool({"action": "send", "target": target, "message": text})
     try:
-        result = json.loads(raw)
-    except Exception:
-        result = {"success": False, "error": str(raw)[:500]}
-    if not (isinstance(result, dict) and result.get("success")):
-        _release(key, stamp)
-    else:
-        LOG.info("%s: replied in Hermes's own thread %s:%s", TOOL, channel, thread_ts)
-    return json.dumps(result)
+        return json.loads(raw)
+    except (TypeError, ValueError):
+        return {"success": False, "error": str(raw)[:500]}
+
+
+def handle(args: dict, **_kw) -> str:
+    host = {
+        "available": available,
+        "readThread": _read_thread,
+        "reserve": lambda channel, thread, stamp: _reserve((channel, thread), stamp),
+        "release": lambda channel, thread, stamp: _release((channel, thread), stamp),
+        "send": _send_thread,
+        "logSend": lambda channel, thread: LOG.info(
+            "%s: replied in Hermes's own thread %s:%s", TOOL, channel, thread),
+        "now": lambda: time.time(),
+    }
+    request = {"channel": str(args.get("channel") or "").strip(),
+               "thread": str(args.get("thread_ts") or "").strip(),
+               "text": str(args.get("text") or "").strip()}
+    return json.dumps(call(__file__, "reply",
+        host, request, sorted(_allowed_channels()), CHANNELS_ENV, MAX_TEXT, _max_per_hour()))
 
 
 def register(ctx):
