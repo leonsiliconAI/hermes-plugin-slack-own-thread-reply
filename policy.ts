@@ -8,8 +8,8 @@ interface Thread {
 interface Host {
   available(): boolean;
   readThread(channel: string, thread: string): Promise<Thread>;
-  reserve(channel: string, thread: string, stamp: number): boolean;
-  release(channel: string, thread: string, stamp: number): void;
+  reserve(channel: string, thread: string, stamp: number): Promise<boolean>;
+  release(channel: string, thread: string, stamp: number): Promise<void>;
   send(target: string, text: string): Promise<unknown>;
   logSend(channel: string, thread: string): void;
   now(): number;
@@ -53,7 +53,7 @@ export async function reply(
     );
 
   const stamp = host.now();
-  if (!host.reserve(channel, thread, stamp))
+  if (!(await host.reserve(channel, thread, stamp)))
     return error(
       `already sent ${budget} replies to this thread in the last hour; ` +
         "wait for an answer instead of pinging again",
@@ -70,6 +70,12 @@ export async function reply(
     if (sent) host.logSend(channel, thread);
     return result;
   } finally {
-    if (!sent) host.release(channel, thread, stamp);
+    if (!sent) await host.release(channel, thread, stamp);
   }
+}
+
+export function reserveReply(sent: number[], now: number, budget: number) {
+  const recent = sent.filter((stamp) => now - stamp < 3600);
+  if (recent.length >= budget) return { allowed: false, recent };
+  return { allowed: true, recent: [...recent, now] };
 }

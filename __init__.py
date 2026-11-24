@@ -14,7 +14,6 @@ a thread root posted by Hermes's own bot user, read back from Slack before every
 """
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 import os
@@ -24,7 +23,7 @@ import time
 import urllib.parse
 import urllib.request
 
-from ._pythonmonkey import call
+from ._pythonmonkey import blocking, call
 
 LOG = logging.getLogger(__name__)
 
@@ -138,13 +137,9 @@ def _allowed_channels() -> set[str]:
 def _reserve(key: tuple[str, str], now: float) -> bool:
     """Count one send against the per-thread hourly budget; False when the budget is spent."""
     with _LOCK:
-        recent = [t for t in _SENT.get(key, []) if now - t < 3600]
-        if len(recent) >= _max_per_hour():
-            _SENT[key] = recent
-            return False
-        recent.append(now)
-        _SENT[key] = recent
-        return True
+        result = call(__file__, "reserveReply", _SENT.get(key, []), now, _max_per_hour())
+        _SENT[key] = result["recent"]
+        return result["allowed"]
 
 
 def _release(key: tuple[str, str], stamp: float) -> None:
@@ -164,11 +159,7 @@ def _send_module():
     return send
 
 
-async def _read_thread(channel, thread_ts):
-    return await asyncio.to_thread(_read_thread_sync, channel, thread_ts)
-
-
-def _read_thread_sync(channel, thread_ts):
+def _read_thread(channel, thread_ts):
     try:
         token = _bot_token()
         user_id, bot_id = _identity(token)
@@ -178,11 +169,7 @@ def _read_thread_sync(channel, thread_ts):
     return {"userId": user_id, "botId": bot_id, "root": root}
 
 
-async def _send_thread(target, text):
-    return await asyncio.to_thread(_send_thread_sync, target, text)
-
-
-def _send_thread_sync(target, text):
+def _send_thread(target, text):
     raw = _send_module().send_message_tool({"action": "send", "target": target, "message": text})
     try:
         return json.loads(raw)
@@ -193,10 +180,10 @@ def _send_thread_sync(target, text):
 def handle(args: dict, **_kw) -> str:
     host = {
         "available": available,
-        "readThread": _read_thread,
-        "reserve": lambda channel, thread, stamp: _reserve((channel, thread), stamp),
-        "release": lambda channel, thread, stamp: _release((channel, thread), stamp),
-        "send": _send_thread,
+        "readThread": blocking(_read_thread),
+        "reserve": blocking(lambda channel, thread, stamp: _reserve((channel, thread), stamp)),
+        "release": blocking(lambda channel, thread, stamp: _release((channel, thread), stamp)),
+        "send": blocking(_send_thread),
         "logSend": lambda channel, thread: LOG.info(
             "%s: replied in Hermes's own thread %s:%s", TOOL, channel, thread),
         "now": lambda: time.time(),

@@ -19,7 +19,7 @@ async function reply(host, { channel, thread, text }, allowed, channelEnv, limit
 	if (root?.ts !== thread) return error(`${thread} is not the top message of a thread in ${channel}; pass the thread's own ts`);
 	if (root.user !== userId && (!botId || root.bot_id !== botId)) return error(`the top message of ${channel}:${thread} was not posted by Hermes's bot (${userId}); this tool only replies in threads Hermes started`);
 	const stamp = host.now();
-	if (!host.reserve(channel, thread, stamp)) return error(`already sent ${budget} replies to this thread in the last hour; wait for an answer instead of pinging again`);
+	if (!await host.reserve(channel, thread, stamp)) return error(`already sent ${budget} replies to this thread in the last hour; wait for an answer instead of pinging again`);
 	let sent = false;
 	try {
 		const result = await host.send(`slack:${channel}:${thread}`, text);
@@ -27,7 +27,19 @@ async function reply(host, { channel, thread, text }, allowed, channelEnv, limit
 		if (sent) host.logSend(channel, thread);
 		return result;
 	} finally {
-		if (!sent) host.release(channel, thread, stamp);
+		if (!sent) await host.release(channel, thread, stamp);
 	}
 }
+function reserveReply(sent, now, budget) {
+	const recent = sent.filter((stamp) => now - stamp < 3600);
+	if (recent.length >= budget) return {
+		allowed: false,
+		recent
+	};
+	return {
+		allowed: true,
+		recent: [...recent, now]
+	};
+}
 exports.reply = reply;
+exports.reserveReply = reserveReply;
