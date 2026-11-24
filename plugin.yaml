@@ -1,0 +1,9 @@
+name: slack-own-thread-reply
+label: Slack own-thread reply
+version: 1.0.1
+description: >
+  Lets Hermes, cron jobs included, reply in Slack threads its own bot started, such as handoffs
+  to other agents in #agents, where `hermes send` refuses with "no record of the thread".
+author: leonsilicon
+provides_tools:
+  - slack_reply_own_thread

@@ -1,0 +1,13 @@
+{
+  "name": "@-/com.leonsilicon.hermes.plugins.slack-own-thread-reply",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Hermes plugin: reply in Slack threads Hermes started, from cron jobs too.",
+  "type": "module",
+  "imports": {
+    "#plugin": "./plugin.ts"
+  },
+  "exports": {
+    ".": "./+.ts"
+  }
+}
