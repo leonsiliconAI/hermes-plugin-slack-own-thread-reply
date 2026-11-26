@@ -11,7 +11,8 @@ export const pluginFiles = [
   "plugin.yaml",
   "__init__.py",
   "pyproject.toml",
-  "_pythonmonkey.py",
+  "_bridge.py",
+  "bridge.cjs",
   "policy.cjs",
 ] as const;
 

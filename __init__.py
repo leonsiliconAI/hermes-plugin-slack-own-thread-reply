@@ -23,7 +23,7 @@ import time
 import urllib.parse
 import urllib.request
 
-from ._pythonmonkey import blocking, call
+from ._bridge import blocking, call
 
 LOG = logging.getLogger(__name__)
 
